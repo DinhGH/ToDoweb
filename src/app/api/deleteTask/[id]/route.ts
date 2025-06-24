@@ -1,12 +1,15 @@
 import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const userId = parseInt(params.id);
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = Number(params.id);
 
   try {
     await prisma.task.delete({
-      where: { id: userId },
+      where: { id },
     });
 
     return NextResponse.json({ message: "Xoá thành công" });

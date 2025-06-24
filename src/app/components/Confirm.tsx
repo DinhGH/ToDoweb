@@ -22,7 +22,7 @@ export default function Confirm({ mess, onClose, onConfirm }: Props) {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [onClose]);
   return (
     <div
       ref={confirmRef}
