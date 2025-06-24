@@ -1,103 +1,495 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import Form from "./components/Form";
+import { Task } from "@prisma/client";
+import { FaGrip } from "react-icons/fa6";
+import DropdownMenu from "./components/DropdownMenu";
+import Announce from "./components/Announce";
+import Confirm from "./components/Confirm";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [selectedButton, setSelectedButton] = useState("To-Do");
+  const [showForm, setShowForm] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [showAnnounce, setShowAnnounce] = useState({
+    show: false,
+    title: "",
+    mess: "",
+  });
+  const [announceKey, setAnnounceKey] = useState(0);
+  const [messConfirm, setMessConfirm] = useState("");
+  const [confirmKey, setConfirmKey] = useState(0);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"delete" | "done" | null>(
+    null,
+  );
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  useEffect(() => {
+    fetch("/api/getTask")
+      .then((res) => res.json())
+      .then((data) => setTasks(data));
+  }, []);
+
+  useEffect(() => {
+    const checkAndUpdateFailTasks = async () => {
+      const now = new Date();
+
+      const tasksToUpdate = tasks.filter((task) => {
+        if (task.status === "Done" || task.status === "Fail") return false;
+
+        const taskDate = new Date(task.date);
+        const today = new Date(now.toDateString());
+
+        if (taskDate < today) return true;
+
+        if (taskDate.toDateString() === now.toDateString()) {
+          const [endHour, endMinute] = (task.end ?? "00:00")
+            .split(":")
+            .map(Number);
+
+          const endTime = new Date(taskDate);
+          endTime.setHours(endHour, endMinute, 0, 0);
+
+          if (now > endTime) return true;
+        }
+
+        return false;
+      });
+
+      if (tasksToUpdate.length > 0) {
+        for (const task of tasksToUpdate) {
+          try {
+            await fetch(`/api/updateTask/${task.id}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status: "Fail" }),
+            });
+          } catch (error) {
+            console.error("Failed to update task to Fail:", error);
+          }
+        }
+
+        const updated = await fetch("/api/getTask").then((res) => res.json());
+        setTasks(updated);
+      }
+    };
+
+    checkAndUpdateFailTasks();
+    const interval = setInterval(checkAndUpdateFailTasks, 60000);
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  const handleMarkAsDone = (id: number) => {
+    setConfirmId(id);
+    setMessConfirm("Are you sure to mark this task as completed?");
+    setConfirmAction("done");
+    setOpenDropdownId(null);
+    setConfirmKey(confirmKey + 1);
+  };
+
+  const handleConfirmMarkAsDone = async (id: number) => {
+    try {
+      const res = await fetch(`/api/updateTask/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "Done" }),
+      });
+
+      if (res.ok) {
+        const updatedTasks = await fetch("/api/getTask").then((res) =>
+          res.json(),
+        );
+        setTasks(updatedTasks);
+        setOpenDropdownId(null);
+        setAnnounceKey(announceKey + 1);
+        setShowAnnounce({
+          show: true,
+          title: "Success",
+          mess: "Task Completed",
+        });
+      } else {
+        setAnnounceKey(announceKey + 1);
+        setShowAnnounce({
+          show: true,
+          title: "Error",
+          mess: "Task Incompleted",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating task:", error);
+    } finally {
+      setConfirmId(null);
+    }
+  };
+
+  const handleDeleteTask = (id: number) => {
+    setConfirmId(id);
+    setMessConfirm("Are you sure to delete this task?");
+    setConfirmAction("delete");
+    setOpenDropdownId(null);
+    setConfirmKey(confirmKey + 1);
+  };
+
+  const handleConfirmDelete = async (id: number) => {
+    try {
+      const res = await fetch(`api/deleteTask/${id}`, { method: "DELETE" });
+
+      if (res.ok) {
+        const updatedTasks = await fetch("/api/getTask").then((res) =>
+          res.json(),
+        );
+        setTasks(updatedTasks);
+        setOpenDropdownId(null);
+        setAnnounceKey(announceKey + 1);
+        setShowAnnounce({
+          show: true,
+          title: "Success",
+          mess: "Deleting Completed",
+        });
+      } else {
+        setAnnounceKey(announceKey + 1);
+        setShowAnnounce({
+          show: true,
+          title: "Error",
+          mess: "Deleting Incompleted",
+        });
+      }
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setConfirmId(null);
+    }
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setShowForm(true);
+    setOpenDropdownId(null);
+  };
+
+  const filterTasks = tasks.filter((task) => {
+    const matchStatus =
+      selectedButton === "All"
+        ? true
+        : selectedButton === "Completed"
+          ? task.status === "Done"
+          : selectedButton === "To-Do"
+            ? task.status === "To-Do"
+            : task.status === "Fail";
+
+    const matchDate =
+      selectedDate === "" ||
+      new Date(task.date).toISOString().split("T")[0] === selectedDate;
+
+    return matchStatus && matchDate;
+  });
+  return (
+    <>
+      <div
+        style={{
+          background: "linear-gradient(to bottom, #A4BAEE, #969FBE)",
+        }}
+        className="
+          w-10/12 h-11/12 max-sm:w-11/12 max-sm:px-3
+          mx-auto mt-4 py-9 px-11
+          rounded-4xl
+          relative
+        "
+      >
+        <h1
+          className="
+            mb-8
+            text-center text-4xl
+          "
+        >
+          TODO
+        </h1>
+
+        <div
+          className="
+            flex
+          "
+        >
+          <button
+            onClick={() => setShowForm(true)}
+            className="
+              max-sm:mr-5
+              py-2 mr-15
+              text-black
+              bg-[#E8ECF8]
+              rounded-lg
+              hover:bg-[#5180F6] hover:text-white grow-2
+            "
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Add new
+          </button>
+          {["All", "To-Do", "Fail", "Completed"].map((btn) => {
+            const isSelected = selectedButton === btn;
+            const baseStyle = `
+              max-sm:mx-1
+              py-2 mx-4
+              rounded-lg
+              grow-1
+              text-black
+            `;
+
+            let bgStyle = "";
+            if (isSelected) {
+              if (btn === "Fail") bgStyle = "bg-red-300 text-white";
+              else if (btn === "Completed") bgStyle = "bg-green-300 text-white";
+              else bgStyle = "bg-[#5180F6] text-white";
+            } else {
+              bgStyle = "bg-[#E8ECF8] hover:text-white";
+              if (btn === "Fail") bgStyle += " hover:bg-red-300";
+              else if (btn === "Completed") bgStyle += " hover:bg-green-300";
+              else bgStyle += " hover:bg-[#5180F6]";
+            }
+
+            return (
+              <button
+                key={btn}
+                onClick={() => setSelectedButton(btn)}
+                className={`
+                  ${baseStyle}
+                  ${bgStyle}
+                `}
+              >
+                {btn}
+              </button>
+            );
+          })}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+
+        <div
+          className="
+            overflow-y-auto
+            w-full h-9/12
+            my-7
+            text-black
+            bg-[#E8ECF8]
+            rounded-2xl
+            custom-scrollbar
+          "
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+          <table
+            className="
+              w-full
+              text-left
+              border-collapse
+              table-auto
+            "
+          >
+            <thead
+              className="
+                z-10
+                bg-[#c3d3f0]
+                sticky top-0
+              "
+            >
+              <tr>
+                {[
+                  "Title",
+                  "Description",
+                  "Date",
+                  "Start",
+                  "End",
+                  "Priority",
+                  "Action",
+                ].map((th) => {
+                  if (th === "Date") {
+                    return (
+                      <th
+                        key={th}
+                        className="
+                          text-center
+                          bg-[#c3d3f0]
+                        "
+                      >
+                        <div
+                          className="
+                            flex flex-row
+                            items-center justify-center
+                          "
+                        >
+                          <input
+                            type="date"
+                            id="filterDate"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="
+                              text-black text-sm
+                              rounded outline-0
+                            "
+                          />
+                        </div>
+                      </th>
+                    );
+                  }
+
+                  return (
+                    <th
+                      key={th}
+                      className="
+                        p-2
+                        text-center
+                        bg-[#c3d3f0]
+                      "
+                    >
+                      {th}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+
+            <tbody>
+              {filterTasks.map((task) => (
+                <tr
+                  key={task.id}
+                  className={`
+                    border-t border-gray-400
+                    ${
+                    task.status === "Done"
+                    ? " bg-green-300 hover:bg-[#a4e7b9]"
+                    : task.status === "Fail"
+                    ? "bg-red-300 hover:bg-[#e5afaf]"
+                    : " hover:bg-[#d8e2e0]"
+                    }
+                  `}
+                >
+                  <td
+                    className="
+                      max-w-[70px] max-sm:max-w-[240px]
+                      p-2
+                      text-center break-words whitespace-normal
+                    "
+                  >
+                    {task.title}
+                  </td>
+                  <td
+                    className="
+                      max-w-[100px] max-sm:max-w-[350px]
+                      p-2
+                      text-center break-words whitespace-normal
+                    "
+                  >
+                    {task.description}
+                  </td>
+                  <td
+                    className="
+                      p-2
+                      text-center
+                    "
+                  >
+                    {new Date(task.date).toLocaleDateString()}
+                  </td>
+                  <td
+                    className="
+                      p-2
+                      text-center
+                    "
+                  >
+                    {task.start}
+                  </td>
+                  <td
+                    className="
+                      p-2
+                      text-center
+                    "
+                  >
+                    {task.end}
+                  </td>
+                  <td
+                    className="
+                      p-2
+                      text-center
+                    "
+                  >
+                    {task.priority}
+                  </td>
+                  <td
+                    className="
+                      p-2
+                      text-center
+                      relative
+                    "
+                  >
+                    <FaGrip
+                      onClick={() =>
+                        setOpenDropdownId(
+                          openDropdownId === task.id ? null : task.id,
+                        )
+                      }
+                      className="
+                        mx-auto
+                        cursor-pointer
+                        hover:scale-110
+                      "
+                    />
+                    {openDropdownId === task.id && (
+                      <DropdownMenu
+                        onClose={() => setOpenDropdownId(null)}
+                        onDone={() => handleMarkAsDone(task.id)}
+                        onEdit={() => handleEditTask(task)}
+                        onDelete={() => handleDeleteTask(task.id)}
+                      />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {showForm && (
+          <Form
+            task={editingTask}
+            tt={editingTask ? "Edit Task" : "New Task"}
+            onClose={() => {
+              setShowForm(false);
+              setEditingTask(null);
+            }}
+            onAddTask={(newTask) => setTasks([newTask, ...tasks])}
+            onUpdateTask={(updateTask) => {
+              setTasks(
+                tasks.map((t) => (t.id === updateTask.id ? updateTask : t)),
+              );
+            }}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        )}
+      </div>
+      {showAnnounce.show && (
+        <Announce
+          key={announceKey}
+          title={showAnnounce.title}
+          mess={showAnnounce.mess}
+        />
+      )}
+
+      {confirmId !== null && confirmAction !== null && (
+        <Confirm
+          key={confirmKey}
+          mess={messConfirm}
+          onClose={() => {
+            setConfirmId(null);
+            setConfirmAction(null);
+          }}
+          onConfirm={() => {
+            if (confirmAction === "delete") handleConfirmDelete(confirmId);
+            else if (confirmAction === "done")
+              handleConfirmMarkAsDone(confirmId);
+          }}
+        />
+      )}
+    </>
   );
 }
