@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "preinstall": "npx npm-force-resolutions",
     "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",
@@ -25,8 +26,12 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
+    "npm-force-resolutions": "^0.0.10",
     "prisma": "^6.10.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "resolutions": {
+    "lightningcss": "1.21.0"
   }
 }
