@@ -199,7 +199,7 @@ export default function Home() {
           background: "linear-gradient(to bottom, #A4BAEE, #969FBE)",
         }}
         className="
-          w-10/12 h-11/12 max-sm:w-11/12 max-sm:px-3
+          w-10/12 h-11/12 max-sm:w-11/12 max-sm:px-3 min-w-[370px]
           mx-auto mt-4 py-9 px-11
           rounded-4xl
           relative
