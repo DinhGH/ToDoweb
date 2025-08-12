@@ -235,8 +235,8 @@ export default function Home() {
           {["All", "To-Do", "Fail", "Completed"].map((btn) => {
             const isSelected = selectedButton === btn;
             const baseStyle = `
-              max-sm:mx-1
-              py-2 mx-4
+              max-md:mx-1
+              py-2 mx-4 max-md:px-1
               rounded-lg
               grow-1
               text-black
