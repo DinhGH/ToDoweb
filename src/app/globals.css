@@ -28,6 +28,7 @@ body {
   width: 100%;
   overflow: hidden;
   background-repeat: no-repeat;
+  min-width: 370px;
 }
 
 .custom-scrollbar {
